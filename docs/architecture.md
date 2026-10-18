@@ -15,8 +15,10 @@ Client: receiver -> PlaybackBuffer -> PlaybackEngine -> AudioSink
 Policy: NetworkMonitor -> ClockSynchronizer / BufferController / PlaybackSynchronizer
 ```
 
-Chỉ `MusicServer`, handler bootstrap, framing và JSON envelope đã có implementation.
+`MusicServer`, handler bootstrap, shared DTO/validation, framing/JSON/binary audio codec đã có implementation.
 Các interface Server là ranh giới dự kiến, chưa có implementation nghiệp vụ.
+Protocol v1 FROZEN FOR P0 IMPLEMENTATION ở Checkpoint 1D, giữ nguyên A01–A16 đã áp dụng ở 1C. Shared models nằm trong common/model,
+không phải wire DTO thuộc riêng Server. Xem protocol.md, room-state.md và audio-contract.md.
 
 ## Nguyên tắc khi triển khai tiếp
 
@@ -28,6 +30,10 @@ Các interface Server là ranh giới dự kiến, chưa có implementation nghi
   chưa phát `SERVER_BUSY` trước khi đọc được requestId.
 - Business state cần per-room lock. Không giữ lock khi đọc audio hoặc ghi socket.
 - roomVersion theo room state; streamEpoch dùng cho audio stale sau seek/đổi bài.
+- Playback/EOF serialize cùng room: normalize due EOF trước expectedRoomVersion check, không PAUSED anchor tại permanent EOF.
+- AudioChunkService trả domain AudioChunkData, không requestId; protocol layer tạo wire metadata và correlation.
+- Admission counts, dedup/retry là config policy; frame/metadata/PCM ceilings mới là wire invariants.
+- One logical Client state-apply pipeline; SYNC_STATE chỉ optional resync, không bắt buộc periodic.
 - Không sử dụng số byte tải được làm vị trí âm thanh đã phát.
 - Buffer hữu hạn, request window hữu hạn, không tải cả bài vào RAM trước khi phát.
 

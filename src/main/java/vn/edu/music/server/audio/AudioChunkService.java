@@ -2,8 +2,8 @@ package vn.edu.music.server.audio;
 
 import java.io.IOException;
 
-/** TODO TV2: membership/epoch validation, frame-aligned disk reads and last-chunk handling. */
+/** Domain/audio boundary only; handler/protocol layer owns wire metadata and requestId correlation. */
 public interface AudioChunkService {
-    AudioChunk read(String roomId, String clientId, String trackId,
-                    long streamEpoch, long chunkIndex) throws IOException;
+    AudioChunkData read(String roomId, String clientId, String trackId,
+                        long streamEpoch, long chunkIndex) throws IOException;
 }

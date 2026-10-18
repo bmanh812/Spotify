@@ -90,4 +90,16 @@ class FrameCodecTest {
         Arrays.fill(frame.payload(), (byte) 0);
         assertArrayEquals(new byte[]{1, 2}, frame.payload());
     }
+
+    @Test
+    void exactV1FrameLimitAcceptedAndOneByteOverRejected() throws Exception {
+        FrameCodec v1 = new FrameCodec(ProtocolLimits.MAX_FRAME_BYTES);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        v1.write(output, new Frame(FrameType.CONTROL_JSON, new byte[65535]));
+        assertEquals(65540, output.size());
+        assertEquals(65535, v1.read(new ByteArrayInputStream(output.toByteArray())).payload().length);
+        assertEquals(ErrorCode.FRAME_TOO_LARGE, assertThrows(ProtocolException.class,
+                () -> v1.write(new ByteArrayOutputStream(), new Frame(FrameType.CONTROL_JSON, new byte[65536]))).code());
+        assertThrows(IllegalArgumentException.class, () -> new FrameCodec(65537));
+    }
 }

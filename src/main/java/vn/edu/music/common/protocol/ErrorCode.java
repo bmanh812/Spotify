@@ -1,9 +1,10 @@
 package vn.edu.music.common.protocol;
 
-/** Draft codes. NOT_IMPLEMENTED is used by the bootstrap dispatcher until handlers are added. */
+/** Contract v1 review candidate. NOT_IMPLEMENTED remains a bootstrap-only diagnostic. */
 public enum ErrorCode {
-    INVALID_REQUEST, UNSUPPORTED_VERSION, FRAME_TOO_LARGE,
+    INVALID_REQUEST, UNSUPPORTED_VERSION, UNSUPPORTED_MESSAGE, FRAME_TOO_LARGE,
     ROOM_NOT_FOUND, ROOM_FULL, ROOM_CLOSED, NOT_HOST,
     TRACK_NOT_FOUND, INVALID_SEEK, STALE_STATE, STALE_STREAM, EMPTY_QUEUE,
+    NOT_IN_ROOM, ALREADY_IN_ROOM, REQUEST_ID_CONFLICT,
     RATE_LIMITED, SERVER_BUSY, INTERNAL_ERROR, NOT_IMPLEMENTED
 }

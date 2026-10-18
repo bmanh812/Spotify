@@ -6,13 +6,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-/** Draft framing. Each connection must serialize complete writes with its own write lock. */
+/** V1 framing. Each connection must serialize complete writes with its own write lock. */
 public final class FrameCodec {
     private final int maxFrameBytes;
 
     public FrameCodec(int maxFrameBytes) {
-        if (maxFrameBytes < 1) {
-            throw new IllegalArgumentException("maxFrameBytes must be positive");
+        if (maxFrameBytes < 1 || maxFrameBytes > ProtocolLimits.MAX_FRAME_BYTES) {
+            throw new IllegalArgumentException("maxFrameBytes must be within the v1 ceiling");
         }
         this.maxFrameBytes = maxFrameBytes;
     }
@@ -46,7 +46,7 @@ public final class FrameCodec {
         byte[] payload = frame.payload();
         long length = 1L + payload.length;
         if (length > maxFrameBytes) {
-            throw new ProtocolException("Frame exceeds configured maximum");
+            throw new ProtocolException(ErrorCode.FRAME_TOO_LARGE, "Frame exceeds configured maximum");
         }
         DataOutputStream data = new DataOutputStream(output);
         data.writeInt((int) length);
@@ -57,7 +57,8 @@ public final class FrameCodec {
 
     private void checkLength(int length) throws ProtocolException {
         if (length < 1 || length > maxFrameBytes) {
-            throw new ProtocolException("Invalid frame length: " + length);
+            throw new ProtocolException(length > maxFrameBytes ? ErrorCode.FRAME_TOO_LARGE
+                    : ErrorCode.INVALID_REQUEST, "Invalid frame length: " + length);
         }
     }
 }

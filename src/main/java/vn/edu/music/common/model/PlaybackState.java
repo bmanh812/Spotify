@@ -1,4 +1,4 @@
-package vn.edu.music.server.room;
+package vn.edu.music.common.model;
 
 public enum PlaybackState {
     PAUSED, PLAYING

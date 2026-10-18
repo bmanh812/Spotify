@@ -1,2 +1,2 @@
-/** Shared draft protocol. Member 1 owns contracts; members 2 and 3 review before freeze. */
+/** Contract v1 candidate and codecs. Group review is required before declaring it frozen. */
 package vn.edu.music.common.protocol;

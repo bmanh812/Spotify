@@ -1,0 +1,40 @@
+[
+  {"type":"CREATE_ROOM","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":null,"payload":{"nickname":"Minh"}},
+  {"type":"JOIN_ROOM","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":null,"payload":{"nickname":"Linh","roomCode":"ABC123"}},
+  {"type":"LEAVE_ROOM","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{}},
+  {"type":"QUEUE_ADD","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"trackId":"t1","expectedRoomVersion":2}},
+  {"type":"PLAY","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"expectedRoomVersion":2}},
+  {"type":"PAUSE","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"expectedRoomVersion":2}},
+  {"type":"SEEK","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"positionMs":500,"expectedRoomVersion":2}},
+  {"type":"NEXT_TRACK","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"expectedRoomVersion":2}},
+  {"type":"AUDIO_CHUNK_REQUEST","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"trackId":"t1","streamEpoch":1,"chunkIndex":0}},
+  {"type":"PING","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":null,"payload":{"clientSendTimeMs":1792000000000}},
+  {"type":"CLIENT_METRICS","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"streamEpoch":1,"bufferLevelMs":500,"targetBufferMs":1500,"rttMs":20.5,"driftMs":-10}},
+  {"type":"ROOM_CREATED","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{
+    "clientId":"c1","serverTimeMs":1792000000000,
+    "state":{"roomId":"r1","roomCode":"ABC123","hostClientId":"c1","participants":[{"clientId":"c1","nickname":"Minh"}],"currentTrackId":null,"playbackState":"PAUSED","positionMs":0,"anchorServerTimeMs":1792000000000,"roomVersion":1,"streamEpoch":0,"queue":[]},
+    "tracks":[{"trackId":"t1","title":"Tone","durationMs":1000,"sampleRate":44100,"channels":2,"sampleSizeBits":16,"frameSizeBytes":4,"totalFrames":44100,"totalPcmBytes":176400,"chunkFrames":11025,"chunkCount":4}]
+  }},
+  {"type":"ROOM_STATE","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{
+    "clientId":"c2","serverTimeMs":1792000000000,
+    "state":{"roomId":"r1","roomCode":"ABC123","hostClientId":"c1","participants":[{"clientId":"c1","nickname":"Minh"},{"clientId":"c2","nickname":"Linh"}],"currentTrackId":null,"playbackState":"PAUSED","positionMs":0,"anchorServerTimeMs":1792000000000,"roomVersion":2,"streamEpoch":0,"queue":[]},
+    "tracks":[{"trackId":"t1","title":"Tone","durationMs":1000,"sampleRate":44100,"channels":2,"sampleSizeBits":16,"frameSizeBytes":4,"totalFrames":44100,"totalPcmBytes":176400,"chunkFrames":11025,"chunkCount":4}]
+  }},
+  {"type":"LEAVE_ACK","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"clientId":"c2","roomVersion":3,"roomClosed":false}},
+  {"type":"QUEUE_STATE","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{
+    "serverTimeMs":1792000000000,
+    "state":{"roomId":"r1","roomCode":"ABC123","hostClientId":"c1","participants":[{"clientId":"c1","nickname":"Minh"}],"currentTrackId":null,"playbackState":"PAUSED","positionMs":0,"anchorServerTimeMs":1792000000000,"roomVersion":4,"streamEpoch":0,"queue":[{"queueItemId":"q1","trackId":"t1","addedByClientId":"c1"}]}
+  }},
+  {"type":"PLAYBACK_STATE","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{
+    "serverTimeMs":1792000000000,
+    "state":{"roomId":"r1","roomCode":"ABC123","hostClientId":"c1","participants":[{"clientId":"c1","nickname":"Minh"}],"currentTrackId":"t1","playbackState":"PLAYING","positionMs":0,"anchorServerTimeMs":1792000004500,"roomVersion":5,"streamEpoch":1,"queue":[]}
+  }},
+  {"type":"PONG","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":null,"payload":{"clientSendTimeMs":1792000000000,"serverReceiveTimeMs":1792000000010,"serverSendTimeMs":1792000000011}},
+  {"type":"METRICS_ACK","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"streamEpoch":1,"serverReceiveTimeMs":1792000000010}},
+  {"type":"SYNC_STATE","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{
+    "serverTimeMs":1792000001000,
+    "state":{"roomId":"r1","roomCode":"ABC123","hostClientId":"c1","participants":[{"clientId":"c1","nickname":"Minh"}],"currentTrackId":"t1","playbackState":"PLAYING","positionMs":0,"anchorServerTimeMs":1792000004500,"roomVersion":5,"streamEpoch":1,"queue":[]}
+  }},
+  {"type":"ROOM_CLOSED","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"roomVersion":6,"reason":"HOST_LEFT","serverTimeMs":1792000002000}},
+  {"type":"ERROR","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"code":"STALE_STATE","message":"Refresh authoritative room state","retryable":false,"currentRoomVersion":5}}
+]

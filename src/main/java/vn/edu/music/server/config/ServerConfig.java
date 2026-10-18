@@ -1,5 +1,7 @@
 package vn.edu.music.server.config;
 
+import vn.edu.music.common.protocol.ProtocolLimits;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -15,7 +17,8 @@ public record ServerConfig(String host, int port, int workerThreads,
         if (port < 0 || port > 65535) {
             throw new IllegalArgumentException("server.port must be between 0 and 65535");
         }
-        if (workerThreads < 1 || queueCapacity < 1 || socketReadTimeoutMs < 0 || maxFrameBytes < 1) {
+        if (workerThreads < 1 || queueCapacity < 1 || socketReadTimeoutMs < 0 || maxFrameBytes < 1
+                || maxFrameBytes > ProtocolLimits.MAX_FRAME_BYTES) {
             throw new IllegalArgumentException("Invalid server limits or timeout");
         }
     }

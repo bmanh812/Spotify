@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "type": "AUDIO_CHUNK",
+    "protocolVersion": 1,
+    "requestId": "12345678-1234-1234-1234-123456789abc",
+    "roomId": "r1",
+    "trackId": "t1",
+    "streamEpoch": 1,
+    "chunkIndex": 1,
+    "startFrame": 44,
+    "frameCount": 1,
+    "isLast": true,
+    "pcmByteLength": 4
+  },
+  "pcmHex": "01020304"
+}

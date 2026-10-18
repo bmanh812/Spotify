@@ -1,0 +1,7 @@
+[
+  {"description":"PLAY missing expectedRoomVersion", "message":{"type":"PLAY","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{}}},
+  {"description":"SEEK negative position", "message":{"type":"SEEK","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"positionMs":-1,"expectedRoomVersion":1}}},
+  {"description":"Client cannot supply actor identity", "message":{"type":"LEAVE_ROOM","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"clientId":"forged"}}},
+  {"description":"Epoch zero cannot identify active audio", "message":{"type":"AUDIO_CHUNK_REQUEST","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","roomId":"r1","payload":{"trackId":"t1","streamEpoch":0,"chunkIndex":0}}},
+  {"description":"Unknown type must not be dispatched", "message":{"type":"UNKNOWN","protocolVersion":1,"requestId":"12345678-1234-1234-1234-123456789abc","payload":{}}}
+]

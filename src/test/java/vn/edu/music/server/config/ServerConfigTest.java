@@ -27,7 +27,7 @@ class ServerConfigTest {
 
     @ParameterizedTest
     @CsvSource({"-1, 1, 1, 1, 1", "65536, 1, 1, 1, 1", "0, 0, 1, 1, 1",
-            "0, 1, 0, 1, 1", "0, 1, 1, -1, 1", "0, 1, 1, 1, 0"})
+            "0, 1, 0, 1, 1", "0, 1, 1, -1, 1", "0, 1, 1, 1, 0", "0, 1, 1, 1, 65537"})
     void rejectsInvalidLimits(int port, int threads, int queue, int timeout, int maxFrame) {
         assertThrows(IllegalArgumentException.class,
                 () -> new ServerConfig("127.0.0.1", port, threads, queue, timeout, maxFrame));
