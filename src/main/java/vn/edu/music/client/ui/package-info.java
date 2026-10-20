@@ -1,2 +1,2 @@
-/** TODO member 1: minimal Swing screens and controller; no network or audio writes on the EDT. */
+/** TV1 minimal Swing room screen and asynchronous controller. View updates are confined to the EDT. */
 package vn.edu.music.client.ui;

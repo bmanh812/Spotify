@@ -1,2 +1,2 @@
-/** TODO member 1: TCP Client, request correlation, timeouts and server-push dispatch. */
+/** TV1 TCP transport: bounded workers/queues, validation, correlation, deadlines and ordered delivery. */
 package vn.edu.music.client.network;

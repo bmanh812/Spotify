@@ -1,2 +1,2 @@
-/** TODO member 1: receiver, bounded PlaybackBuffer, PlaybackEngine and replaceable AudioSink. */
+/** TV1 PCM receiver, physical bounded buffer and device engine; policy/scheduling is supplied by TV3. */
 package vn.edu.music.client.audio;

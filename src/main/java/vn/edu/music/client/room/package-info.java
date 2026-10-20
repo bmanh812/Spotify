@@ -1,2 +1,2 @@
-/** TODO member 1: authoritative room snapshot application and Client room lifecycle. */
+/** TV1 gateway and single full-state pipeline with membership and revision gates. */
 package vn.edu.music.client.room;

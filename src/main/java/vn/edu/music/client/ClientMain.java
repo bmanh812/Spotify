@@ -1,12 +1,19 @@
 package vn.edu.music.client;
 
-/** Member 1 entry point placeholder. No Client networking, Swing UI or audio playback yet. */
+import vn.edu.music.client.ui.RoomWindow;
+import javax.swing.SwingUtilities;
+import java.awt.GraphicsEnvironment;
+
+/** TV1 Swing entry point. Scheduled audio integration awaits the TV2/TV3 handoff. */
 public final class ClientMain {
     private ClientMain() {
     }
 
     public static void main(String[] args) {
-        System.out.println("Client skeleton only. Member 1 implements network, room state, Swing and playback.");
-        System.out.println("See docs/ownership.md and docs/member-2-server.md for integration boundaries.");
+        if (GraphicsEnvironment.isHeadless()) {
+            System.err.println("Client UI requires a desktop. Run the Client tests for headless verification.");
+            return;
+        }
+        SwingUtilities.invokeLater(() -> new RoomWindow().setVisible(true));
     }
 }
