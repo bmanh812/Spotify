@@ -2,6 +2,35 @@
 
 Ngày bắt đầu: 20/10/2026. Owner: TV1. Protocol v1 và A01–A16 giữ nguyên.
 
+Cập nhật kế hoạch ngày 21/10/2026: đã nhận phản hồi thiết kế của TV3, chưa có implementation.
+Xem [kế hoạch tích hợp I01–I11](member-1-integration-plan.md). Trạng thái code và số test bên dưới
+là baseline đợt 20/10 khi có ghi rõ ngày đó; kết quả triển khai tiếp ngày 21/10 ghi ở phần cập nhật mới.
+
+## Cập nhật triển khai ngày 21 tháng 10 năm 2026
+
+| Task | Trạng thái | Bàn giao và bằng chứng |
+|---|---|---|
+| I02 Audio runtime | Verified | AudioRuntime với một audio worker, queue 64, coalesced pump 10 ms, capacity 6000 ms, scope/token gate, fresh snapshot và teardown. Test có callback cũ, queue đầy, driver close lỗi và dọn thread. |
+| I03 Audio request handle | Verified | AudioRequest capture room/track/epoch/revision/generation/index; cancel lan xuống transport, không gửi trùng index đang pending; reset/epoch/leave/disconnect loại dữ liệu cũ. API chunk cũ cũng được sửa cancellation. |
+| I04 WAV/device smoke | DEVICE_API_PASS | LocalWavSource/WavSmokeMain; đã phát WAV tổng hợp 22050 frame/500 ms qua SourceDataLine thật trên Windows. Chưa ghi nhận xác nhận nghe bằng tai. |
+| I05–I09 Ghép policy/sync/UI metrics | Waiting G1 | TV3 mới xác nhận thiết kế; chưa có API Java/implementation và context policy đầy đủ để compile ghép. |
+| I10 Server thật | Waiting G2 | Server còn NOT_IMPLEMENTED, chưa có catalog/streaming/PONG/WAV library để nghiệm thu 3 Client/2 phòng. |
+| I11 Bàn giao cuối | Một phần docs đã xong | API/runtime và câu hỏi ghép đã viết; nghiệm thu/experiment cuối chờ I10 và TV3. |
+
+Full Maven verify cuối ngày 21/10 lúc 18:22 giờ Việt Nam: **283 test, 0 failure, 0 error, 0 skipped**.
+Đợt này thêm 17 test so với baseline 266; tổng test Client là 53, 230 test chung/Server giữ nguyên.
+Có 9 test AudioRuntime, 4 test WAV diagnostic và 4 scenario MusicClient mới về cancel/epoch/leave và scope.
+Test phát hiện một race khi observe thấy room state mới trước audio scope; đã sửa bằng gate chung trước publish/observe initial.
+
+Smoke thiết bị chạy lại lúc 18:21:03: Java 24.0.2, Windows 11, DirectAudioDevice/SourceDataLine,
+buffer 17640 byte; thiết bị xử lý đạt 500 ms, elapsed tổng 1918 ms, cleanup hoàn tất.
+Đây là kiểm tra local WAV/device API, không phải số liệu startup mạng, drift hoặc nghiệm thu âm thanh nhiều Client.
+
+Chi tiết API và lệnh chạy ở [runtime audio TV1](member-1-audio-runtime.md).
+Bốn đầu vào cụ thể cần TV3 bổ sung ở [phản hồi tiếp cho TV3](member-1-followup-to-member-3.md).
+Không thay đổi production/test Server, common protocol, client/sync, client/buffer, experiment, pom.xml hoặc config.
+Chưa có automatic prefetch, scheduled start, adaptive hay drift correction nối vào giao diện.
+
 ## Phạm vi được phép thay đổi
 
 TV1 triển khai client/network, client/room, client/audio, client/ui, ClientMain và test Client.
@@ -27,7 +56,7 @@ PlaybackBuffer vật lý nằm ở client/audio theo ownership; client/buffer d�
 3. UI gọi controller, hiển thị lỗi NOT_IMPLEMENTED trung thực với Server bootstrap hiện tại.
 4. Phần tích hợp Server thật và sync/policy chờ điều kiện trong member-1-coordination.md.
 
-## Trạng thái bàn giao ngày 20/10/2026
+## Baseline bàn giao ngày 20/10/2026
 
 | Task | Trạng thái | Bằng chứng và giới hạn |
 |---|---|---|
@@ -40,10 +69,11 @@ PlaybackBuffer vật lý nằm ở client/audio theo ownership; client/buffer d�
 | C7 Tích hợp thiết bị thật và nghiệm thu | Chờ Server/audio/policy | Chưa nghe thử WAV local, chưa xác nhận SourceDataLine trên thiết bị thật, 3 Client/2 phòng hoặc clean-machine. |
 | C8 Docs TV1 | Hoàn tất đợt bàn giao này | API, quyết định TV1, cách chạy, kết quả test và câu hỏi phối hợp đã ghi riêng. |
 
-Không đánh dấu toàn bộ TV1 Done. `AudioReceiver`, `PlaybackEngine` chưa được tự động nối vào giao diện;
-chưa có background audio pump/prefetch/scheduled-start runtime. UI hiển thị rõ chờ tích hợp âm thanh.
+Không đánh dấu toàn bộ TV1 Done. Tại baseline này chưa có background audio pump/prefetch/scheduled-start runtime.
+Audio pump được bổ sung ngày 21/10 như ghi ở trên; prefetch/scheduled-start vẫn chờ API TV3.
+UI hiển thị rõ chờ tích hợp âm thanh.
 
-## Xác minh
+## Xác minh baseline ngày 20 tháng 10
 
 - Full Maven verify: 266 test, 0 failure, 0 error, 0 skipped; 36 test mới thuộc Client, 230 test sẵn có giữ nguyên.
 - JDK 24 build target release 21 theo pom.xml; không sửa Java target hoặc dependency phiên bản.

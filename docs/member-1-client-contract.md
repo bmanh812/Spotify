@@ -3,6 +3,9 @@
 Ngày: 20/10/2026. Đây là quyết định ở phạm vi TV1. Không thay đổi Protocol v1, không xác nhận thay TV2/TV3.
 Các adapter liên module chỉ ghép sau phản hồi trong [tài liệu phối hợp](member-1-coordination.md).
 
+Cập nhật 21/10: có AudioRuntime, AudioRequest và smoke WAV local, xem [API runtime mới](member-1-audio-runtime.md).
+MusicClient hiện sở hữu runtime và cleanup, nhưng chưa ghép clock/policy/scheduled playback của TV3.
+
 ## Transport
 
 `ProtocolClient.connect(host, port, ClientSettings, Listener)` thực hiện kết nối TCP; gọi ngoài EDT.
@@ -32,12 +35,15 @@ Không auto-retry. UUID đã dùng không được gửi lại bằng API hiện
 chạm giới hạn thì từ chối request mới, yêu cầu disconnect thủ công. Đây là policy TV1, không wire constant hoặc reconnect recovery.
 Tự reconnect không được triển khai. Timeout/cancel loại pending; audio/direct response muộn bị bỏ, không làm rebind membership.
 Pending count đo request Client đang chờ, không phải số request Server còn đang xử lý sau timeout.
-`ProtocolClient` cho phép cancel Future; `MusicClient` chưa cung cấp cancel/retry nghiệp vụ hoặc bảo đảm hủy mutation phía Server.
+Cancel Future MusicClient hiện lan tới ProtocolClient. AudioRequest theo generation cho phép hủy read khi đổi stream;
+không có auto-retry nghiệp vụ hoặc bảo đảm hủy mutation/IO phía Server.
 
 ## Gateway và pipeline trạng thái
 
 `MusicClient`: create, join, leave, addTrack, playback(PLAY/PAUSE/SEEK/NEXT_TRACK), chunk(index), ping,
-view, observe, observeIncoming, close. Các action trả Future; lỗi validation/precondition cũng trả failed Future.
+view, observe, observeIncoming, close; thêm audio(), requestAudio(token,index), pendingRequestCount và awaitTermination.
+Các action cũ trả Future; lỗi validation/precondition cũng trả failed Future. requestAudio trả handle và có thể reject
+đồng bộ nếu scope/index/reservation không hợp lệ. observe/observeIncoming trả AutoCloseable để gỡ callback.
 
 `RoomStateStore.View`: clientId, state nullable, catalog immutable, lifecyclePending, uncertain; isHost là tiện ích UI.
 CREATE/JOIN/LEAVE không chồng nhau. Chỉ lifecycle response khớp operation đang chờ được bind/unbind.
@@ -63,7 +69,8 @@ Snapshot phân biệt tổng queuedFrames, contiguousFrames, capacityFrames và 
 
 `AudioReceiver.accept(Incoming, requestGeneration)` gọi trên audio worker, kiểm tra room/track/epoch/catalog
 rồi chuyển vào engine. Generation phải được capture lúc lập yêu cầu/callback, không lấy generation mới tại lúc callback cũ trả về.
-Receiver chưa tự đăng ký vào MusicClient hoặc tự chạy prefetch; TV1 sẽ ghép sau khi thống nhất policy/lịch TV3.
+Receiver chưa tự đăng ký vào MusicClient hoặc tự chạy prefetch; AudioRuntime mới cung cấp việc thực thi tuần tự.
+TV1 sẽ ghép prefetch sau khi nhận API/code policy TV3 và context còn thiếu.
 
 ## Engine và thiết bị
 
@@ -72,12 +79,13 @@ Receiver chưa tự đăng ký vào MusicClient hoặc tự chạy prefetch; TV1
 - reset(roomId,track,epoch,targetFrame): stop/flush/reopen thiết bị, clear buffer, trả local generation mới.
 - offer(chunk,expectedGeneration): loại callback cũ, không block chờ buffer trống.
 - pump(maxFrames,expectedGeneration): ghi một phần PCM trong giới hạn availableBytes; giữ phần chưa ghi khi partial/zero write.
-- start(expectedGeneration), pause(), snapshot(), close().
+- start(expectedGeneration), pause(), snapshot(), unload() và close().
 
 TV3 adapter và TV1 IO phải serialize reset/offer/pump/start/pause/close trên cùng audio worker.
 Engine có synchronized bảo vệ thêm, nhưng không dùng lock đó để thay lịch điều phối.
 Device calls bị cấm trên EDT. Snapshot/offer không thực hiện blocking device write.
-Snapshot getter của sink cần nhanh; không có scheduler riêng trong engine.
+Snapshot getter của sink cần nhanh; không có scheduler riêng trong engine. AudioRuntime TV1 hiện sở hữu pump timer
+và đưa snapshot/device calls về audio worker; policy executor của TV3 vẫn chưa được ghép.
 
 Snapshot gồm room/track/epoch/generation, actualPositionMs, appBufferFrames, appContiguousFrames,
 capacityFrames, lineBufferFrames, running, underrun, sampledNanos.

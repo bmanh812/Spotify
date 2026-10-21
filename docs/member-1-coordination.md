@@ -1,6 +1,7 @@
 # Điểm cần thống nhất giữa TV1 TV2 và TV3
 
-Ngày: 20/10/2026. Tài liệu bàn giao để các thành viên phản hồi; không ghi nhận như đã được họ phê duyệt.
+Ngày lập: 20/10/2026. Cập nhật: 21/10/2026 sau khi nhận phản hồi TV3.
+Các câu hỏi ban đầu được giữ để đối chiếu; trạng thái phản hồi hiện tại ghi ở cuối tài liệu.
 Các câu hỏi dưới đây là hợp đồng tích hợp/runtime, không mở lại A01–A16 hoặc wire protocol đã freeze.
 
 ## TV2 xác nhận
@@ -37,7 +38,26 @@ bằng clock local thay cho Server clock. Không công bố audio end-to-end ho�
 khi Server chưa implement. Sau phản hồi, ghi quyết định và test ghép trước khi chuyển trạng thái Verified.
 
 Ngoài điểm phối hợp liên thành viên, TV1 còn phải chạy smoke WAV/SourceDataLine thật và clean-machine trước nghiệm thu cuối.
-Test fake sink/fixture hiện tại không thay các bước này. Chưa có lời xác nhận từ TV2 hoặc TV3 trong đợt bàn giao này.
+Test fake sink/fixture hiện tại không thay các bước này. Tại đợt bàn giao 20/10 chưa có xác nhận của TV2/TV3;
+ngày 21/10 đã nhận xác nhận thiết kế của TV3 như ghi dưới đây. Chưa nhận phản hồi TV2 trong cuộc trao đổi này.
+
+## Trạng thái sau phản hồi TV3 ngày 21 tháng 10
+
+Nguồn: `C:/Users/abc/Downloads/member-3-response-to-member-1.md`, đã đọc đầy đủ.
+
+- Đã nhận xác nhận TV3 về ownership, threading, timestamp, capacity/targets/watermarks,
+  tick/measurement intervals, generation/resync và schema dữ liệu đo dự kiến.
+- Chưa nhận implementation/commit TV3; client/sync và client/buffer hiện vẫn chỉ có package-info.java.
+- Còn cần Java types/constructors, context metadata/target/capacity, policy lifecycle/reset,
+  snapshot time alignment và interface sample/event. Không tự tạo API chính thức thay TV3.
+- Các câu hỏi TV2 về endpoint/handlers, WAV, giới hạn và retention vẫn còn nguyên.
+
+[Kế hoạch TV1 sau phản hồi](member-1-integration-plan.md) ghi task I01–I11, gate bàn giao,
+tiêu chí kiểm thử và điểm dừng. Đây là kế hoạch, chưa phải xác nhận đã tích hợp runtime.
+
+Cập nhật triển khai tiếp 21/10: TV1 đã hoàn thành cơ chế AudioRuntime/AudioRequest và chạy smoke WAV trên thiết bị.
+Chưa tích hợp runtime với thuật toán TV3. API thật và kết quả ở [runtime TV1](member-1-audio-runtime.md);
+bốn câu hỏi bàn giao còn thiếu ở [phản hồi tiếp cho TV3](member-1-followup-to-member-3.md).
 
 ## Mẫu phản hồi
 

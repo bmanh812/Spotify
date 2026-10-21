@@ -149,4 +149,127 @@ class MusicClientTest {
             assertFalse(receiver.accept(stale, generation));
         }
     }
+
+    private static AudioRuntime.Token prepareAudio(MusicClient client) throws Exception {
+        CompletableFuture<Void> ready = new CompletableFuture<>();
+        try (var subscription = client.observe(view -> {
+            if (view.state() != null && view.state().currentTrackId() != null) ready.complete(null);
+        })) {
+            ready.get(3, TimeUnit.SECONDS);
+        }
+        var state = client.view().state();
+        return client.audio().reset(new AudioRuntime.StreamScope(state.roomId(), TRACK, state.streamEpoch()), 0).get(3, TimeUnit.SECONDS);
+    }
+
+    private static AudioSink silentSink() {
+        return new AudioSink() {
+            public void open(TrackMetadata track) { }
+            public int availableBytes() { return 44100; }
+            public long bufferedFrames() { return 0; }
+            public long processedFrames() { return 0; }
+            public int write(byte[] bytes, int offset, int length) { return length; }
+            public void start() { }
+            public void stop() { }
+            public void flush() { }
+            public void close() { }
+        };
+    }
+
+    @Test void cancellingAudioHandleReleasesTransportAndIgnoresLateChunk() throws Exception {
+        CountDownLatch received = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (Fixture fixture = new Fixture(wire -> {
+            wire.create(); wire.send(update(state(2, 1, "t1")));
+            var first = wire.read(); received.countDown(); assertTrue(release.await(3, TimeUnit.SECONDS));
+            wire.audio(first, 0);
+            var barrier = wire.read(); long t1 = ((Payloads.Ping) PayloadCodec.decode(barrier)).clientSendTimeMs();
+            wire.send(PayloadCodec.message(MessageType.PONG, barrier.requestId(), null, new Payloads.Pong(t1, TIME, TIME)));
+            wire.audio(wire.read(), 0);
+        }); MusicClient client = MusicClient.connect("127.0.0.1", fixture.listener.getLocalPort(),
+                new ClientSettings(1000, 3000, 16, 16, 32), silentSink(), new AudioRuntime.Settings(6000, 16, 0, 2048))) {
+            client.create("Host").get(3, TimeUnit.SECONDS);
+            var token = prepareAudio(client);
+            var request = client.requestAudio(token, 0); assertTrue(received.await(3, TimeUnit.SECONDS));
+            assertThrows(IllegalStateException.class, () -> client.requestAudio(token, 0));
+            assertTrue(request.cancel()); assertEquals(0, client.pendingRequestCount()); assertEquals(0, client.audio().pendingRequests());
+            release.countDown(); client.ping().get(3, TimeUnit.SECONDS);
+            assertEquals(0, client.audio().snapshot().get(3, TimeUnit.SECONDS).engine().appBufferFrames());
+            var next = client.requestAudio(token, 0);
+            assertNotEquals(request.requestId(), next.requestId());
+            var incoming = next.response().get(3, TimeUnit.SECONDS);
+            assertTrue(client.audio().offer(next.token(), incoming.audio()).get(3, TimeUnit.SECONDS));
+            client.close(); assertTrue(client.awaitTermination(3000));
+        } finally { release.countDown(); }
+    }
+
+    @Test void serverEpochChangeCancelsAudioReadsAndOldTokenCannotStartDevice() throws Exception {
+        CountDownLatch received = new CountDownLatch(1);
+        CountDownLatch transition = new CountDownLatch(1);
+        try (Fixture fixture = new Fixture(wire -> {
+            wire.create(); wire.send(update(state(2, 1, "t1")));
+            var request = wire.read(); received.countDown(); assertTrue(transition.await(3, TimeUnit.SECONDS));
+            wire.send(update(state(3, 2, "t1"))); wire.audio(request, 0);
+            var barrier = wire.read(); long t1 = ((Payloads.Ping) PayloadCodec.decode(barrier)).clientSendTimeMs();
+            wire.send(PayloadCodec.message(MessageType.PONG, barrier.requestId(), null, new Payloads.Pong(t1, TIME, TIME)));
+        }); MusicClient client = MusicClient.connect("127.0.0.1", fixture.listener.getLocalPort(),
+                new ClientSettings(1000, 3000, 16, 16, 32), silentSink(), new AudioRuntime.Settings(6000, 16, 0, 2048))) {
+            client.create("Host").get(3, TimeUnit.SECONDS); var token = prepareAudio(client);
+            var request = client.requestAudio(token, 0); assertTrue(received.await(3, TimeUnit.SECONDS));
+            CompletableFuture<Void> changed = new CompletableFuture<>();
+            try (var subscription = client.observe(view -> {
+                if (view.state() != null && view.state().streamEpoch() == 2) changed.complete(null);
+            })) {
+                transition.countDown(); changed.get(3, TimeUnit.SECONDS);
+            }
+            assertTrue(request.response().isCancelled()); assertEquals(0, client.pendingRequestCount());
+            client.ping().get(3, TimeUnit.SECONDS);
+            assertFalse(client.audio().isCurrent(token)); assertFalse(client.audio().start(token).get(3, TimeUnit.SECONDS));
+            assertNull(client.audio().snapshot().get(3, TimeUnit.SECONDS).engine().trackId());
+            client.close(); assertTrue(client.awaitTermination(3000));
+        } finally { transition.countDown(); }
+    }
+
+    @Test void cancellingLegacyChunkFutureAlsoCancelsTheTransportFuture() throws Exception {
+        CountDownLatch received = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (Fixture fixture = new Fixture(wire -> {
+            wire.create(); wire.send(update(state(2, 1, "t1")));
+            wire.read(); received.countDown(); assertTrue(release.await(3, TimeUnit.SECONDS));
+        }); MusicClient client = fixture.connect()) {
+            client.create("Host").get(3, TimeUnit.SECONDS);
+            CompletableFuture<Void> selected = new CompletableFuture<>();
+            try (var subscription = client.observe(view -> {
+                if (view.state() != null && view.state().currentTrackId() != null) selected.complete(null);
+            })) { selected.get(3, TimeUnit.SECONDS); }
+            var future = client.chunk(0); assertTrue(received.await(3, TimeUnit.SECONDS));
+            assertTrue(future.cancel(false)); assertEquals(0, client.pendingRequestCount());
+            assertFalse(client.view().uncertain()); release.countDown();
+            client.close(); assertTrue(client.awaitTermination(3000));
+        } finally { release.countDown(); }
+    }
+
+    @Test void leaveUnloadsAudioAndNewRoomGetsAnIndependentTokenOnSameConnection() throws Exception {
+        try (Fixture fixture = new Fixture(wire -> {
+            wire.create(); wire.send(update(state(2, 1, "t1")));
+            var leave = wire.read(); assertEquals(MessageType.LEAVE_ROOM, leave.type());
+            wire.send(PayloadCodec.message(MessageType.LEAVE_ACK, leave.requestId(), "r1", new Payloads.LeaveAck("c1", 3, true)));
+            var create = wire.read(); assertEquals(MessageType.CREATE_ROOM, create.type());
+            var second = new vn.edu.music.common.model.RoomState("r2", "DEF456", "c1", state(1, 0, null).participants(), null,
+                    vn.edu.music.common.model.PlaybackState.PAUSED, 0, TIME, 1, 0, java.util.List.of());
+            wire.send(membership(MessageType.ROOM_CREATED, create.requestId(), second));
+            var selected = new vn.edu.music.common.model.RoomState("r2", "DEF456", "c1", second.participants(), "t1",
+                    vn.edu.music.common.model.PlaybackState.PAUSED, 0, TIME, 2, 1, java.util.List.of());
+            wire.send(update(selected));
+        }); MusicClient client = MusicClient.connect("127.0.0.1", fixture.listener.getLocalPort(),
+                new ClientSettings(1000, 3000, 16, 16, 32), silentSink(), new AudioRuntime.Settings(6000, 16, 0, 2048))) {
+            client.create("Host").get(3, TimeUnit.SECONDS); var first = prepareAudio(client);
+            client.leave().get(3, TimeUnit.SECONDS);
+            assertNull(client.audio().snapshot().get(3, TimeUnit.SECONDS).engine().trackId());
+            assertFalse(client.audio().isCurrent(first)); assertTrue(client.isConnected());
+            client.create("Host again").get(3, TimeUnit.SECONDS); var second = prepareAudio(client);
+            assertEquals("r2", second.scope().roomId()); assertNotEquals(first.revision(), second.revision());
+            assertFalse(client.audio().offer(first, chunk(0, 1)).get(3, TimeUnit.SECONDS));
+            client.close(); assertTrue(client.awaitTermination(3000));
+        }
+    }
 }

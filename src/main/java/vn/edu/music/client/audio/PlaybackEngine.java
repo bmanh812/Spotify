@@ -107,11 +107,21 @@ public final class PlaybackEngine implements AutoCloseable {
         if (SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("Audio device work must run outside EDT");
     }
 
+    /** Release a stream without permanently closing the engine; next reset may open a new stream. */
+    public synchronized void unload() {
+        workerOnly(); ensureOpen();
+        running = false; generation++;
+        buffer.clear(); staged = new byte[0]; stagedOffset = 0;
+        try { sink.close(); }
+        finally { track = null; roomId = null; epoch = 0; baseFrame = 0; processedOrigin = 0; }
+    }
+
     @Override public synchronized void close() {
         workerOnly();
         if (closed) return;
         closed = true; running = false; generation++;
         buffer.clear(); staged = new byte[0]; stagedOffset = 0;
-        sink.close(); track = null;
+        try { sink.close(); }
+        finally { track = null; roomId = null; epoch = 0; baseFrame = 0; processedOrigin = 0; }
     }
 }

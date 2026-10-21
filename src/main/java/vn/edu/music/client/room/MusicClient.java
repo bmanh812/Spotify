@@ -1,6 +1,8 @@
 package vn.edu.music.client.room;
 
 import vn.edu.music.client.network.*;
+import vn.edu.music.client.audio.*;
+import vn.edu.music.common.model.PlaybackState;
 import vn.edu.music.common.protocol.*;
 
 import java.io.IOException;
@@ -11,39 +13,74 @@ import java.util.function.Consumer;
 
 /** Application gateway. Future completions happen after the ordered state-apply callback. */
 public final class MusicClient implements AutoCloseable {
+    private final Object stateGate = new Object();
     private final RoomStateStore rooms = new RoomStateStore();
     private final CopyOnWriteArrayList<Consumer<RoomStateStore.View>> observers = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Consumer<ProtocolClient.Incoming>> incomingObservers = new CopyOnWriteArrayList<>();
-    private ProtocolClient transport;
+    private final AudioRuntime audio;
+    private volatile ProtocolClient transport;
     private volatile Throwable disconnectCause;
 
-    private MusicClient() { }
+    private MusicClient(AudioSink sink, AudioRuntime.Settings audioSettings) { audio = new AudioRuntime(sink, audioSettings); }
 
     public static MusicClient connect(String host, int port, ClientSettings settings) throws IOException {
-        MusicClient client = new MusicClient();
-        client.transport = ProtocolClient.connect(host, port, settings, new ProtocolClient.Listener() {
+        return connect(host, port, settings, new SourceDataLineSink(), AudioRuntime.Settings.defaults());
+    }
+
+    /** The sink is injectable; connecting never opens an audio device. */
+    public static MusicClient connect(String host, int port, ClientSettings settings, AudioSink sink,
+                                      AudioRuntime.Settings audioSettings) throws IOException {
+        MusicClient client = new MusicClient(sink, audioSettings);
+        try {
+            client.transport = ProtocolClient.connect(host, port, settings, new ProtocolClient.Listener() {
             @Override public void onIncoming(ProtocolClient.Incoming in) throws IOException {
-                if (in.control() != null && client.rooms.accept(in.control(), in.request())) client.publish();
+                synchronized (client.stateGate) {
+                    if (in.control() != null && client.rooms.accept(in.control(), in.request())) {
+                        client.synchronizeAudio(); client.publish();
+                    }
+                }
                 // Adapters must return promptly; they enqueue work on their own audio/policy worker.
                 for (var observer : client.incomingObservers) observer.accept(in);
             }
             @Override public void onDisconnected(Throwable cause) {
                 client.disconnectCause = cause;
-                client.rooms.disconnected(); client.publish();
+                synchronized (client.stateGate) {
+                    client.audio.close(); client.rooms.disconnected(); client.publish();
+                }
             }
-        });
-        return client;
+            });
+            return client;
+        } catch (IOException | RuntimeException e) { client.audio.close(); throw e; }
     }
 
-    public RoomStateStore.View view() { return rooms.view(); }
+    public RoomStateStore.View view() { synchronized (stateGate) { return rooms.view(); } }
     public boolean isConnected() { return transport != null && !transport.isClosed(); }
     public Throwable disconnectCause() { return disconnectCause; }
-    public void observe(Consumer<RoomStateStore.View> observer) { observers.add(observer); observer.accept(view()); }
-    public void observeIncoming(Consumer<ProtocolClient.Incoming> observer) { incomingObservers.add(observer); }
+    public AutoCloseable observe(Consumer<RoomStateStore.View> observer) {
+        synchronized (stateGate) { observers.add(observer); observer.accept(rooms.view()); }
+        return () -> observers.remove(observer);
+    }
+    public AutoCloseable observeIncoming(Consumer<ProtocolClient.Incoming> observer) {
+        incomingObservers.add(observer); return () -> incomingObservers.remove(observer);
+    }
+    public AudioRuntime audio() { return audio; }
+    public int pendingRequestCount() { return transport.pendingCount(); }
+
+    private void synchronizeAudio() {
+        var view = rooms.view(); var state = view.state();
+        if (state == null || state.currentTrackId() == null || view.uncertain()) { audio.updateScope(null); return; }
+        var track = view.tracks().stream().filter(t -> t.trackId().equals(state.currentTrackId())).findFirst().orElseThrow();
+        audio.updateScope(new AudioRuntime.StreamScope(state.roomId(), track, state.streamEpoch()));
+        var token = audio.latest().token();
+        if (state.playbackState() == PlaybackState.PAUSED && token != null) audio.pause(token);
+        // PLAYING needs a valid TV3 clock/plan. It never triggers immediate playback here.
+    }
 
     private void publish() {
-        var snapshot = rooms.view();
-        for (var observer : observers) observer.accept(snapshot);
+        synchronized (stateGate) {
+            var snapshot = rooms.view();
+            for (var observer : observers) observer.accept(snapshot);
+        }
     }
 
     public CompletableFuture<ProtocolClient.Incoming> create(String nickname) {
@@ -63,7 +100,7 @@ public final class MusicClient implements AutoCloseable {
     private CompletableFuture<ProtocolClient.Incoming> lifecycle(MessageType type, String room, Payloads.Payload payload) {
         try {
             var request = PayloadCodec.message(type, UUID.randomUUID().toString(), room, payload);
-            rooms.beginLifecycle(request); publish();
+            synchronized (stateGate) { rooms.beginLifecycle(request); publish(); }
             return send(request);
         } catch (RuntimeException | ProtocolException e) { return CompletableFuture.failedFuture(e); }
     }
@@ -88,9 +125,27 @@ public final class MusicClient implements AutoCloseable {
 
     /** Read-only audio request for the TV1 audio adapter; no automatic prefetch policy here. */
     public CompletableFuture<ProtocolClient.Incoming> chunk(long index) {
-        var state = view().state();
+        var view = view(); var state = view.state();
         if (state == null || state.currentTrackId() == null) return CompletableFuture.failedFuture(new IllegalStateException("No current track"));
-        return command(MessageType.AUDIO_CHUNK_REQUEST, new Payloads.ChunkRequest(state.currentTrackId(), state.streamEpoch(), index));
+        if (view.lifecyclePending() || view.uncertain()) return CompletableFuture.failedFuture(new IllegalStateException("Room unavailable"));
+        try { return send(PayloadCodec.message(MessageType.AUDIO_CHUNK_REQUEST, UUID.randomUUID().toString(), state.roomId(),
+                new Payloads.ChunkRequest(state.currentTrackId(), state.streamEpoch(), index))); }
+        catch (ProtocolException e) { return CompletableFuture.failedFuture(e); }
+    }
+
+    /** Explicit read with a captured audio generation. Does not choose the next index or start playback. */
+    public AudioRequest requestAudio(AudioRuntime.Token token, long index) throws ProtocolException {
+        var view = view(); var state = view.state();
+        if (state == null || view.lifecyclePending() || view.uncertain() || token == null || !audio.isCurrent(token)
+                || !state.roomId().equals(token.scope().roomId()) || !java.util.Objects.equals(state.currentTrackId(), token.scope().track().trackId())
+                || state.streamEpoch() != token.scope().streamEpoch()) throw new IllegalStateException("Audio stream changed");
+        String requestId = UUID.randomUUID().toString();
+        var scope = token.scope();
+        var request = PayloadCodec.message(MessageType.AUDIO_CHUNK_REQUEST, requestId, scope.roomId(),
+                new Payloads.ChunkRequest(scope.track().trackId(), scope.streamEpoch(), index));
+        AudioRequest handle = audio.reserveRequest(token, index, requestId);
+        if (!handle.response().isCancelled()) handle.attach(send(request));
+        return handle;
     }
 
     /** TV3 receives t1 echo, monotonic send and t4 receipt via Incoming; no RTT estimator in TV1. */
@@ -111,14 +166,40 @@ public final class MusicClient implements AutoCloseable {
     }
 
     private CompletableFuture<ProtocolClient.Incoming> send(ProtocolMessage request) {
-        return transport.request(request).whenComplete((result, error) -> {
-            if (error != null) {
-                Throwable cause = error instanceof CompletionException ? error.getCause() : error;
-                rooms.failed(request, cause instanceof TimeoutException || cause instanceof CancellationException);
-                publish();
+        var source = transport.request(request);
+        CompletableFuture<ProtocolClient.Incoming> exposed = new CompletableFuture<>() {
+            @Override public boolean cancel(boolean mayInterruptIfRunning) {
+                if (!source.cancel(false)) return false;
+                return super.cancel(false);
             }
+        };
+        source.whenComplete((result, error) -> {
+            try {
+                if (error != null) {
+                    Throwable cause = error instanceof CompletionException ? error.getCause() : error;
+                    try {
+                        synchronized (stateGate) {
+                            rooms.failed(request, cause instanceof TimeoutException || cause instanceof CancellationException);
+                            synchronizeAudio(); publish();
+                        }
+                    }
+                    finally { exposed.completeExceptionally(cause); }
+                } else exposed.complete(result);
+            } catch (RuntimeException callbackError) { exposed.completeExceptionally(callbackError); }
         });
+        return exposed;
     }
 
-    @Override public void close() { transport.close(); rooms.disconnected(); }
+    @Override public void close() {
+        synchronized (stateGate) { audio.close(); transport.close(); rooms.disconnected(); }
+    }
+
+    public boolean awaitTermination(long timeoutMs) throws InterruptedException {
+        if (javax.swing.SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("Cleanup wait on EDT");
+        if (timeoutMs < 1 || timeoutMs > 60000) throw new IllegalArgumentException("Invalid cleanup timeout");
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+        if (!transport.awaitTermination(timeoutMs)) return false;
+        long remaining = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+        return remaining > 0 && audio.awaitTermination(remaining);
+    }
 }
